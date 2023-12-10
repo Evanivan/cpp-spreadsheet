@@ -1,16 +1,15 @@
 #pragma once
 
+#include <optional>
+#include <unordered_set>
+#include <algorithm>
+
 #include "common.h"
 #include "formula.h"
 
-#include <functional>
-#include <unordered_set>
-
-class Sheet;
-
 class Cell : public CellInterface {
 public:
-    Cell(Sheet& sheet);
+    Cell(const SheetInterface& table, Position pos);
     ~Cell();
 
     void Set(std::string text);
@@ -20,17 +19,24 @@ public:
     std::string GetText() const override;
     std::vector<Position> GetReferencedCells() const override;
 
-    bool IsReferenced() const;
+    bool HasCache() const {
+        return cached_value_.has_value();
+    }
+    void ClearCache() {
+        cached_value_.reset();
+    }
 
 private:
-    class Impl;
-    class EmptyImpl;
-    class TextImpl;
-    class FormulaImpl;
+    const SheetInterface& table_;
+    Position pos_;
+    std::unique_ptr<FormulaInterface> val_;
+    std::optional<std::string> text_;
 
-    std::unique_ptr<Impl> impl_;
+    std::vector<Position> referenced_cells_;
+    std::vector<Position> referring_cells_;
+    mutable std::optional<double> cached_value_;
 
-    // Добавьте поля и методы для связи с таблицей, проверки циклических 
-    // зависимостей, графа зависимостей и т. д.
-
+    void CacheInvalidation(const std::vector<Position>& referring_cells);
+    void HasCircularDependency(const Position& current_pos, const std::vector<Position>& references,
+                                  std::unordered_set<Position, PositionHasher>& visited_cells) const;
 };
