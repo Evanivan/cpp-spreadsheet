@@ -15,6 +15,9 @@ public:
     const CellInterface* GetCell(Position pos) const override;
     CellInterface* GetCell(Position pos) override;
 
+    const Cell* GetCommonCell(Position pos) const;
+    Cell* GetCommonCell(Position pos);
+
     void ClearCell(Position pos) override;
 
     Size GetPrintableSize() const override;

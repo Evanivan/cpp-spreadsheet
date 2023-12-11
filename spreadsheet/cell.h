@@ -9,7 +9,7 @@
 
 class Cell : public CellInterface {
 public:
-    Cell(const SheetInterface& table, Position pos);
+    Cell(SheetInterface& table, Position pos);
     ~Cell();
 
     void Set(std::string text);
@@ -27,7 +27,7 @@ public:
     }
 
 private:
-    const SheetInterface& table_;
+    SheetInterface& table_;
     Position pos_;
     std::unique_ptr<FormulaInterface> val_;
     std::optional<std::string> text_;

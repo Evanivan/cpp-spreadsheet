@@ -9,7 +9,7 @@
 // Реализуйте следующие методы
 using namespace std::literals;
 
-Cell::Cell(const SheetInterface &table, Position pos)
+Cell::Cell(SheetInterface &table, Position pos)
         : table_(table)
           , pos_(pos){
     text_ = "";
@@ -22,66 +22,53 @@ Cell::~Cell() {
 }
 
 void Cell::Set(std::string text) {
-    for (const Position& cell_pos : referenced_cells_) {
-        const CellInterface* cell_interface = table_.GetCell(cell_pos);
-        if (cell_interface) {
-            Cell* cell = const_cast<Cell*>(dynamic_cast<const Cell*>(cell_interface));
-
-            // Find the position in referring_cells_ and erase it
-            auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
-            if (it != cell->referring_cells_.end()) {
-                cell->referring_cells_.erase(it);
-            }
-        }
-    }
-    referenced_cells_.clear();
-
-
     if (!text.empty()) {
         if (text[0] == FORMULA_SIGN && text.size() > 1) { //expression
             std::unique_ptr<FormulaInterface> formula_ptr = ParseFormula({text.begin() + 1, text.end()});
-            auto formula_result = formula_ptr->Evaluate(table_);
 
-//            if (std::holds_alternative<FormulaError>(formula_result)) {
-//                throw FormulaException("#ARITHM!");
-//            } else {
-                const auto& refs = formula_ptr->GetReferencedCells();
-                std::unordered_set<Position, PositionHasher> visited_cells{};
-                HasCircularDependency(pos_, refs, visited_cells);
+            const auto& refs = formula_ptr->GetReferencedCells();
+            std::unordered_set<Position, PositionHasher> visited_cells{};
+            HasCircularDependency(pos_, refs, visited_cells);
 
-                for (const Position& pos : refs) {
-                    if (table_.GetCell(pos) == nullptr) {
-                        auto& non_const_sheet = const_cast<SheetInterface&>(table_);
-                        non_const_sheet.SetCell(pos, ""s);
+            for (const Position& cell_pos : referenced_cells_) {
+                Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
+                if (cell) {
+                    // Find the position in referring_cells_ and erase it
+                    auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
+                    if (it != cell->referring_cells_.end()) {
+                        cell->referring_cells_.erase(it);
                     }
-                    referenced_cells_.emplace_back(pos);
+                }
+            }
+            referenced_cells_.clear();
 
-                    const CellInterface* ref_interface_const = table_.GetCell(pos);
-                    Cell* ref_cell_no_const = const_cast<Cell*>(dynamic_cast<const Cell*>(ref_interface_const));
-                    ref_cell_no_const->referring_cells_.emplace_back(pos_);
+            for (const Position& pos : refs) {
+                if (table_.GetCell(pos) == nullptr) {
+                    auto& non_const_sheet = const_cast<SheetInterface&>(table_);
+                    non_const_sheet.SetCell(pos, ""s);
                 }
-                if (std::holds_alternative<FormulaError>(formula_result)) {
-                    val_ = std::move(formula_ptr);
-                    text_.value() = text;
-//                    throw FormulaException("#ARITHM!");
-                } else {
-                    val_ = std::move(formula_ptr);
-                    text_.value() = text;
-                    cached_value_ = std::get<double>(formula_result);
-                }
-//            }
+                referenced_cells_.emplace_back(pos);
+
+                const CellInterface* ref_interface_const = table_.GetCell(pos);
+                Cell* ref_cell_no_const = const_cast<Cell*>(dynamic_cast<const Cell*>(ref_interface_const));
+                ref_cell_no_const->referring_cells_.emplace_back(pos_);
+            }
+            val_ = std::move(formula_ptr);
+            text_ = std::move(text);
         } else {
-            text_.value() = text;
+            text_ = std::move(text);
         }
     } else {
         text_ = "";
         text_ = nullptr;
     }
+    cached_value_.reset();
 }
 
 void Cell::Clear() {
     text_.reset();
     val_.release();
+    cached_value_.reset();
 }
 
 Cell::Value Cell::GetValue() const {
@@ -93,11 +80,16 @@ Cell::Value Cell::GetValue() const {
         }
     }
 
+    if (cached_value_.has_value()) {
+        return cached_value_.value();
+    }
+
     if (val_ != nullptr) {
         try {
             FormulaInterface::Value result = val_->Evaluate(table_);
             if (std::holds_alternative<double>(result)) {
-                return std::get<double>(result);
+                cached_value_ = std::get<double>(result);
+                return cached_value_.value();
             } else if (std::holds_alternative<FormulaError>(result)) {
                 return std::get<FormulaError>(result);
             }
@@ -116,18 +108,7 @@ std::string Cell::GetText() const {
 }
 
 std::vector<Position> Cell::GetReferencedCells() const {
-    if (!val_) {
-        return {};
-    }
-
-    std::vector<Position> referenced_cells = val_->GetReferencedCells();
-
-    std::sort(referenced_cells.begin(), referenced_cells.end());
-    auto last = std::unique(referenced_cells.begin(), referenced_cells.end());
-    referenced_cells.erase(last, referenced_cells.end());
-
-    return referenced_cells;
-
+    return referenced_cells_;
 }
 
 void Cell::CacheInvalidation(const std::vector<Position>& referring_cells) {

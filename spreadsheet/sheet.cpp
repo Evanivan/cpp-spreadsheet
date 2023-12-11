@@ -41,46 +41,6 @@ void Sheet::SetCell(Position pos, std::string text) {
     row->cells[pos.col]->Set(text);
 }
 
-
-//void Sheet::SetCell(Position pos, std::string text) {
-//    if (!pos.IsValid()) {
-//        throw InvalidPositionException("Invalid position");
-//    }
-//
-//    while (pos.row >= static_cast<int>(data_sheet.rows.size())) {
-//        data_sheet.rows.push_back(std::make_unique<Row>());
-//    }
-//
-//    auto& row = data_sheet.rows[pos.row];
-//    while (pos.col >= static_cast<int>(row->cells.size())) {
-//        row->cells.push_back(std::make_unique<Cell>());
-//    }
-//
-//    row->cells[pos.col]->Set(text);
-//}
-
-//void Sheet::SetCell(Position pos, std::string text) {
-//
-//    if (auto p = GetCell(pos)) {
-//        if (dynamic_cast<const Cell*>(p)->GetText() == text) {
-//            return;
-//        }
-//
-//        cells_[pos.row][pos.col]->Set(text);
-//        return;
-//    }
-//
-//    std::unique_ptr<Cell> cell = std::make_unique<Cell>(*this, pos);
-//    cell->Set(text);
-//
-//    ResizeTable(pos);
-//    cells_[pos.row][pos.col] = std::move(cell);
-//
-//    if (!text.empty()) {
-//        SetSize(pos);
-//    }
-//}
-
 const CellInterface* Sheet::GetCell(Position pos) const {
     if (!pos.IsValid()) {
         throw InvalidPositionException("Invalid position");
@@ -116,18 +76,29 @@ void Sheet::ClearCell(Position pos) {
     if (!pos.IsValid()) {
         throw InvalidPositionException("Invalid pos");
     }
-    if (int(data_sheet.rows.size()) <= pos.row) {
-        return;
-    }
-    if (int(data_sheet.rows.at(pos.row)->cells.size()) <= pos.col) {
-        return;
-    }
     if (pos.row >= static_cast<int>(data_sheet.rows.size())
         || pos.col >= static_cast<int>(data_sheet.rows[pos.row]->cells.size())) {
+        // Если ячейки не существует, то ничего не делаем
         return;
     }
-    data_sheet.rows[pos.row]->cells.at(pos.col).reset();
+
+    std::unique_ptr<Cell>& cell = data_sheet.rows[pos.row]->cells[pos.col];
+    if (!cell) {
+        // Если ячейка уже пуста, то ничего не делаем
+        return;
+    }
+
+    // Проверяем, есть ли ссылки на эту ячейку из других ячеек
+    const auto& referring_cells = cell->GetReferencedCells();
+    if (!referring_cells.empty()) {
+        // Если на ячейку имеются внешние ссылки, очищаем содержимое ячейки, но не удаляем объект Cell
+        cell->Clear();
+    } else {
+        // Если на ячейку нет ссылок, можем ее безопасно уничтожить
+        cell.reset();
+    }
 }
+
 
 Size Sheet::GetPrintableSize() const {
     int max_row = 0;
@@ -201,6 +172,38 @@ void Sheet::PrintTexts(std::ostream& output) const {
         }
         output << '\n';
     }
+}
+
+const Cell *Sheet::GetCommonCell(Position pos) const {
+    if (!pos.IsValid()) {
+        throw InvalidPositionException("Invalid position");
+    }
+    if (int(data_sheet.rows.size()) <= pos.row) {
+        return nullptr;
+    }
+    if (int(data_sheet.rows.at(pos.row)->cells.size()) <= pos.col) {
+        return nullptr;
+    }
+    if (data_sheet.rows[pos.row]->cells[pos.col] != nullptr) {
+        return const_cast<Cell *>(data_sheet.rows[pos.row]->cells[pos.col].get());
+    }
+    return nullptr;
+}
+
+Cell *Sheet::GetCommonCell(Position pos) {
+    if (!pos.IsValid()) {
+        throw InvalidPositionException("Invalid position");
+    }
+    if (int(data_sheet.rows.size()) <= pos.row) {
+        return nullptr;
+    }
+    if (int(data_sheet.rows.at(pos.row)->cells.size()) <= pos.col) {
+        return nullptr;
+    }
+    if (data_sheet.rows[pos.row]->cells[pos.col] != nullptr) {
+        return static_cast<Cell *>(data_sheet.rows[pos.row]->cells[pos.col].get());
+    }
+    return nullptr;
 }
 
 std::unique_ptr<SheetInterface> CreateSheet() {
