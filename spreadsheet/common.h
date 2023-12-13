@@ -59,7 +59,7 @@ public:
     };
 
     FormulaError(Category category)
-        : category_(category) {
+            : category_(category) {
     }
 
     explicit FormulaError(std::string_view string_category);
@@ -71,7 +71,7 @@ public:
     [[nodiscard]] std::string_view ToString() const;
 
     [[nodiscard]] const char* what() const noexcept override {
-        return ToString().data();
+            return ToString().data();
     }
 
 private:

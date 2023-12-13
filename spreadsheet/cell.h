@@ -18,6 +18,8 @@ public:
     Value GetValue() const override;
     std::string GetText() const override;
     std::vector<Position> GetReferencedCells() const override;
+    std::vector<Position> GetCellReferring() const;
+
 
     bool HasCache() const {
         return cached_value_.has_value();
@@ -38,5 +40,5 @@ private:
 
     void CacheInvalidation(const std::vector<Position>& referring_cells);
     void HasCircularDependency(const Position& current_pos, const std::vector<Position>& references,
-                                  std::unordered_set<Position, PositionHasher>& visited_cells) const;
+                               std::unordered_set<Position, PositionHasher>& visited_cells) const;
 };

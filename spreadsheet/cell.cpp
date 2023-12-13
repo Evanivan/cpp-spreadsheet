@@ -11,7 +11,7 @@ using namespace std::literals;
 
 Cell::Cell(SheetInterface &table, Position pos)
         : table_(table)
-          , pos_(pos){
+        , pos_(pos){
     text_ = "";
     val_ = nullptr;
 
@@ -22,53 +22,56 @@ Cell::~Cell() {
 }
 
 void Cell::Set(std::string text) {
+    std::unique_ptr<FormulaInterface> tmp_formula_ptr{};
+    std::vector<Position> tmp_referenced_cells{};
+
     if (!text.empty()) {
         if (text[0] == FORMULA_SIGN && text.size() > 1) { //expression
-            std::unique_ptr<FormulaInterface> formula_ptr = ParseFormula({text.begin() + 1, text.end()});
+            tmp_formula_ptr = ParseFormula({text.begin() + 1, text.end()});
 
-            const auto& refs = formula_ptr->GetReferencedCells();
+            tmp_referenced_cells = tmp_formula_ptr->GetReferencedCells();
             std::unordered_set<Position, PositionHasher> visited_cells{};
-            HasCircularDependency(pos_, refs, visited_cells);
-
-            for (const Position& cell_pos : referenced_cells_) {
-                Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
-                if (cell) {
-                    // Find the position in referring_cells_ and erase it
-                    auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
-                    if (it != cell->referring_cells_.end()) {
-                        cell->referring_cells_.erase(it);
-                    }
+            HasCircularDependency(pos_, tmp_referenced_cells, visited_cells);
+        }
+        for (const Position& cell_pos : referenced_cells_) {
+            Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
+            if (cell) {
+                // Find the position in referring_cells_ and erase it
+                auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
+                if (it != cell->referring_cells_.end()) {
+                    cell->referring_cells_.erase(it);
                 }
             }
-            referenced_cells_.clear();
+        }
+        referenced_cells_.clear();
 
-            for (const Position& pos : refs) {
+        if (tmp_formula_ptr) {
+            for (const Position& pos : tmp_referenced_cells) {
                 if (table_.GetCell(pos) == nullptr) {
-                    auto& non_const_sheet = const_cast<SheetInterface&>(table_);
-                    non_const_sheet.SetCell(pos, ""s);
+                    table_.SetCell(pos, ""s);
                 }
                 referenced_cells_.emplace_back(pos);
 
-                const CellInterface* ref_interface_const = table_.GetCell(pos);
-                Cell* ref_cell_no_const = const_cast<Cell*>(dynamic_cast<const Cell*>(ref_interface_const));
+                Cell* ref_cell_no_const = dynamic_cast<Cell*>(table_.GetCell(pos));
                 ref_cell_no_const->referring_cells_.emplace_back(pos_);
             }
-            val_ = std::move(formula_ptr);
-            text_ = std::move(text);
-        } else {
-            text_ = std::move(text);
+            val_ = std::move(tmp_formula_ptr);
         }
+
+        text_ = std::move(text);
     } else {
         text_ = "";
         text_ = nullptr;
     }
-    cached_value_.reset();
+    this->cached_value_.reset();
+    CacheInvalidation(this->referring_cells_);
 }
 
 void Cell::Clear() {
     text_.reset();
     val_.release();
-    cached_value_.reset();
+    this->cached_value_.reset();
+    CacheInvalidation(this->referring_cells_);
 }
 
 Cell::Value Cell::GetValue() const {
@@ -102,7 +105,7 @@ Cell::Value Cell::GetValue() const {
 
 std::string Cell::GetText() const {
     if (val_ != nullptr) {
-        return '=' + val_->GetExpression();
+        return FORMULA_SIGN + val_->GetExpression();
     }
     return text_.value();
 }
@@ -113,20 +116,19 @@ std::vector<Position> Cell::GetReferencedCells() const {
 
 void Cell::CacheInvalidation(const std::vector<Position>& referring_cells) {
     for (const Position& cell_pos : referring_cells) {
-        const Cell* cell = dynamic_cast<const Cell*>(table_.GetCell(cell_pos));
-        Cell* cell_no_const = const_cast<Cell*>(cell);
+        Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
 
-        if (!cell_no_const->HasCache()) {
+        if (!cell->HasCache()) {
             continue;
         } else {
-            cell_no_const->ClearCache();
-            CacheInvalidation(cell_no_const->referenced_cells_);
+            cell->ClearCache();
+            CacheInvalidation(cell->referenced_cells_);
         }
     }
 }
 
 void Cell::HasCircularDependency(const Position& current_pos, const std::vector<Position>& references,
-                              std::unordered_set<Position, PositionHasher>& visited) const {
+                                 std::unordered_set<Position, PositionHasher>& visited) const {
     for (const Position& ref_pos : references) {
         if (visited.count(ref_pos)) continue;
         if (current_pos == ref_pos) throw CircularDependencyException("Circular dependency");
@@ -137,4 +139,8 @@ void Cell::HasCircularDependency(const Position& current_pos, const std::vector<
             HasCircularDependency(current_pos, ref_cell->GetReferencedCells(), visited);
         }
     }
+}
+
+std::vector<Position> Cell::GetCellReferring() const {
+    return referring_cells_;
 }

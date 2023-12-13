@@ -56,6 +56,7 @@ const CellInterface* Sheet::GetCell(Position pos) const {
     }
     return nullptr;
 }
+
 CellInterface* Sheet::GetCell(Position pos) {
     if (!pos.IsValid()) {
         throw InvalidPositionException("Invalid position");
@@ -89,7 +90,7 @@ void Sheet::ClearCell(Position pos) {
     }
 
     // Проверяем, есть ли ссылки на эту ячейку из других ячеек
-    const auto& referring_cells = cell->GetReferencedCells();
+    const auto& referring_cells = cell->GetCellReferring();
     if (!referring_cells.empty()) {
         // Если на ячейку имеются внешние ссылки, очищаем содержимое ячейки, но не удаляем объект Cell
         cell->Clear();
