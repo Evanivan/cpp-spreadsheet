@@ -22,56 +22,53 @@ Cell::~Cell() {
 }
 
 void Cell::Set(std::string text) {
-    std::unique_ptr<FormulaInterface> tmp_formula_ptr{};
+    std::unique_ptr<FormulaInterface> tmp_formula_ptr = nullptr;
     std::vector<Position> tmp_referenced_cells{};
 
+    if (text[0] == FORMULA_SIGN && text.size() > 1) { //expression
+        tmp_formula_ptr = ParseFormula({text.begin() + 1, text.end()});
+
+        tmp_referenced_cells = tmp_formula_ptr->GetReferencedCells();
+        std::unordered_set<Position, PositionHasher> visited_cells{};
+        HasCircularDependency(pos_, tmp_referenced_cells, visited_cells);
+    }
+    //Erasing all current references
+    for (const Position& cell_pos : referenced_cells_) {
+        Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
+        if (cell) {
+            // Find the position in referring_cells_ and erase it
+            auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
+            if (it != cell->referring_cells_.end()) {
+                cell->referring_cells_.erase(it);
+            }
+        }
+    }
+    referenced_cells_.clear();
+
+    if (tmp_formula_ptr) {
+        for (const Position &pos: tmp_referenced_cells) {
+            if (table_.GetCell(pos) == nullptr) {
+                table_.SetCell(pos, ""s);
+            }
+            referenced_cells_.emplace_back(pos);
+
+            Cell *ref_cell_no_const = dynamic_cast<Cell *>(table_.GetCell(pos));
+            ref_cell_no_const->referring_cells_.emplace_back(pos_);
+        }
+        val_ = std::move(tmp_formula_ptr);
+    }
+
     if (!text.empty()) {
-        if (text[0] == FORMULA_SIGN && text.size() > 1) { //expression
-            tmp_formula_ptr = ParseFormula({text.begin() + 1, text.end()});
-
-            tmp_referenced_cells = tmp_formula_ptr->GetReferencedCells();
-            std::unordered_set<Position, PositionHasher> visited_cells{};
-            HasCircularDependency(pos_, tmp_referenced_cells, visited_cells);
-        }
-        for (const Position& cell_pos : referenced_cells_) {
-            Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
-            if (cell) {
-                // Find the position in referring_cells_ and erase it
-                auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
-                if (it != cell->referring_cells_.end()) {
-                    cell->referring_cells_.erase(it);
-                }
-            }
-        }
-        referenced_cells_.clear();
-
-        if (tmp_formula_ptr) {
-            for (const Position& pos : tmp_referenced_cells) {
-                if (table_.GetCell(pos) == nullptr) {
-                    table_.SetCell(pos, ""s);
-                }
-                referenced_cells_.emplace_back(pos);
-
-                Cell* ref_cell_no_const = dynamic_cast<Cell*>(table_.GetCell(pos));
-                ref_cell_no_const->referring_cells_.emplace_back(pos_);
-            }
-            val_ = std::move(tmp_formula_ptr);
-        }
-
         text_ = std::move(text);
     } else {
         text_ = "";
-        text_ = nullptr;
+        val_ = nullptr;
     }
-    this->cached_value_.reset();
-    CacheInvalidation(this->referring_cells_);
+    CacheInvalidation();
 }
 
 void Cell::Clear() {
-    text_.reset();
-    val_.release();
-    this->cached_value_.reset();
-    CacheInvalidation(this->referring_cells_);
+    CacheInvalidation();
 }
 
 Cell::Value Cell::GetValue() const {
@@ -114,15 +111,23 @@ std::vector<Position> Cell::GetReferencedCells() const {
     return referenced_cells_;
 }
 
-void Cell::CacheInvalidation(const std::vector<Position>& referring_cells) {
-    for (const Position& cell_pos : referring_cells) {
+bool Cell::HasCache() const {
+    return cached_value_.has_value();
+}
+void Cell::ClearCache() {
+    cached_value_.reset();
+}
+
+void Cell::CacheInvalidation() {
+    ClearCache();
+    for (const Position& cell_pos : referring_cells_) {
         Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
 
         if (!cell->HasCache()) {
             continue;
         } else {
             cell->ClearCache();
-            CacheInvalidation(cell->referenced_cells_);
+            CacheInvalidation();
         }
     }
 }

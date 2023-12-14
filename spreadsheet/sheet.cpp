@@ -175,38 +175,6 @@ void Sheet::PrintTexts(std::ostream& output) const {
     }
 }
 
-const Cell *Sheet::GetCommonCell(Position pos) const {
-    if (!pos.IsValid()) {
-        throw InvalidPositionException("Invalid position");
-    }
-    if (int(data_sheet.rows.size()) <= pos.row) {
-        return nullptr;
-    }
-    if (int(data_sheet.rows.at(pos.row)->cells.size()) <= pos.col) {
-        return nullptr;
-    }
-    if (data_sheet.rows[pos.row]->cells[pos.col] != nullptr) {
-        return const_cast<Cell *>(data_sheet.rows[pos.row]->cells[pos.col].get());
-    }
-    return nullptr;
-}
-
-Cell *Sheet::GetCommonCell(Position pos) {
-    if (!pos.IsValid()) {
-        throw InvalidPositionException("Invalid position");
-    }
-    if (int(data_sheet.rows.size()) <= pos.row) {
-        return nullptr;
-    }
-    if (int(data_sheet.rows.at(pos.row)->cells.size()) <= pos.col) {
-        return nullptr;
-    }
-    if (data_sheet.rows[pos.row]->cells[pos.col] != nullptr) {
-        return static_cast<Cell *>(data_sheet.rows[pos.row]->cells[pos.col].get());
-    }
-    return nullptr;
-}
-
 std::unique_ptr<SheetInterface> CreateSheet() {
     return std::make_unique<Sheet>();
 }

@@ -20,14 +20,6 @@ public:
     std::vector<Position> GetReferencedCells() const override;
     std::vector<Position> GetCellReferring() const;
 
-
-    bool HasCache() const {
-        return cached_value_.has_value();
-    }
-    void ClearCache() {
-        cached_value_.reset();
-    }
-
 private:
     SheetInterface& table_;
     Position pos_;
@@ -38,7 +30,9 @@ private:
     std::vector<Position> referring_cells_;
     mutable std::optional<double> cached_value_;
 
-    void CacheInvalidation(const std::vector<Position>& referring_cells);
+    bool HasCache() const;
+    void ClearCache();
+    void CacheInvalidation();
     void HasCircularDependency(const Position& current_pos, const std::vector<Position>& references,
                                std::unordered_set<Position, PositionHasher>& visited_cells) const;
 };
