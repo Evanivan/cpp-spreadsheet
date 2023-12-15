@@ -6,10 +6,14 @@
 
 #include "common.h"
 #include "formula.h"
+#include "sheet.h"
+
+class Sheet;
 
 class Cell : public CellInterface {
 public:
-    Cell(SheetInterface& table, Position pos);
+    Cell(Sheet& table, Position pos);
+
     ~Cell();
 
     void Set(std::string text);
@@ -21,7 +25,7 @@ public:
     std::vector<Position> GetCellReferring() const;
 
 private:
-    SheetInterface& table_;
+    Sheet& table_;
     Position pos_;
     std::unique_ptr<FormulaInterface> val_;
     std::optional<std::string> text_;

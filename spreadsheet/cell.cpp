@@ -9,7 +9,7 @@
 // Реализуйте следующие методы
 using namespace std::literals;
 
-Cell::Cell(SheetInterface &table, Position pos)
+Cell::Cell(Sheet& table, Position pos)
         : table_(table)
         , pos_(pos){
     text_ = "";
@@ -34,7 +34,7 @@ void Cell::Set(std::string text) {
     }
     //Erasing all current references
     for (const Position& cell_pos : referenced_cells_) {
-        Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
+        Cell* cell = table_.GetCommonCell(cell_pos);
         if (cell) {
             // Find the position in referring_cells_ and erase it
             auto it = std::find(cell->referring_cells_.begin(), cell->referring_cells_.end(), pos_);
@@ -52,7 +52,7 @@ void Cell::Set(std::string text) {
             }
             referenced_cells_.emplace_back(pos);
 
-            Cell *ref_cell_no_const = dynamic_cast<Cell *>(table_.GetCell(pos));
+            Cell *ref_cell_no_const = table_.GetCommonCell(pos);
             ref_cell_no_const->referring_cells_.emplace_back(pos_);
         }
         val_ = std::move(tmp_formula_ptr);
@@ -121,7 +121,7 @@ void Cell::ClearCache() {
 void Cell::CacheInvalidation() {
     ClearCache();
     for (const Position& cell_pos : referring_cells_) {
-        Cell* cell = dynamic_cast<Cell*>(table_.GetCell(cell_pos));
+        Cell* cell = table_.GetCommonCell(cell_pos);
 
         if (!cell->HasCache()) {
             continue;
