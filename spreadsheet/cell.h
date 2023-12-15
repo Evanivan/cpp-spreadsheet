@@ -6,7 +6,6 @@
 
 #include "common.h"
 #include "formula.h"
-#include "sheet.h"
 
 class Sheet;
 

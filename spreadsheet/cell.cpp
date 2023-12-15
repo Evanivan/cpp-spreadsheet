@@ -5,6 +5,7 @@
 #include <string>
 #include <optional>
 
+#include "sheet.h"
 
 // Реализуйте следующие методы
 using namespace std::literals;
@@ -68,7 +69,7 @@ void Cell::Set(std::string text) {
 }
 
 void Cell::Clear() {
-    CacheInvalidation();
+    Set("");
 }
 
 Cell::Value Cell::GetValue() const {
